@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vector-service-account
+  annotations:
+    kubernetes.io/service-account.name: '{{ .Release.Name }}-vector'
+type: kubernetes.io/service-account-token
