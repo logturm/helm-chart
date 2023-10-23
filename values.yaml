@@ -39,6 +39,12 @@ vector:
           .kubernetes.stream =  del(.stream)
           .platform = "Kubernetes"
 
+          json = parse_json!(.message)
+
+          if json != {} {
+            . = merge!(., json)
+          }
+
           .apache2 = parse_apache_log(.message, format: "combined") ??
               parse_apache_log(.message, format: "common") ??
               parse_apache_log(.message, format: "error") ??
@@ -47,7 +53,7 @@ vector:
           if .apache2 != {} {
             .platform = "Apache2"
 
-            .ts = format_timestamp!(parse_timestamp(del(.apache2.timestamp), "%d/%b/%Y:%T %z") ?? .dt, "%+")
+            .ts = format_timestamp!(parse_timestamp(del(.apache2.timestamp), "%d/%b/%Y:%T %z") ?? .ts, "%+")
             .level = del(.apache2.severity)
             .message = del(.apache2.message)
 
@@ -73,7 +79,7 @@ vector:
               .ts = format_timestamp!(
                 parse_timestamp(.nginx.timestamp, "%d/%b/%Y:%T %z") ??
                   parse_timestamp(.nginx.timestamp, "%Y/%m/%d %T") ??
-                  .dt,
+                  .ts,
                 "%+"
               )
 
@@ -107,7 +113,7 @@ vector:
           }
 
 
-          .postgres = parse_regex(.message, r'^(?P<dt>\d+-\d+-\d+ \d+:\d+:\d+\.\d+ \S+) \[(?P<pid>\d+)\] (?:(?:(?P<username>\S+)@(?P<database>\S+))?\s*(?P<level>\w+):\s*(?P<message>.*))?') ?? {}
+          .postgres = parse_regex(.message, r'^(?P<ts>\d+-\d+-\d+ \d+:\d+:\d+\.\d+ \S+) \[(?P<pid>\d+)\] (?:(?:(?P<username>\S+)@(?P<database>\S+))?\s*(?P<level>\w+):\s*(?P<message>.*))?') ?? {}
 
           if .postgres != {} {
             .platform = "PostgreSQL"
@@ -115,13 +121,13 @@ vector:
             if exists(.postgres.level) { .level = downcase!(del(.postgres.level)) }
             if exists(.postgres.message) { .message = del(.postgres.message) }
 
-            if exists(.postgres.dt) {
-              parsed_dt = to_string(.postgres.dt)
+            if exists(.postgres.ts) {
+              parsed_ts = to_string(.postgres.ts)
 
-              if !ends_with(parsed_dt, " UTC") {
-                .postgres.local_date_time = del(.postgres.dt)
+              if !ends_with(parsed_ts, " UTC") {
+                .postgres.local_date_time = del(.postgres.ts)
               } else {
-                .ts = del(.postgres.dt)
+                .ts = del(.postgres.ts)
               }
             }
 
@@ -160,13 +166,13 @@ vector:
             del(.postgres)
           }
 
-          .mysql = parse_regex(.message, r'^(?P<dt>\d+-\d+-\d+T\d+:\d+:\d+\.\d+\w+)\s+(?P<thread>\d+)\s+\[(?P<priority>\S+)\]\s*\[(?P<error_code>\S+)\]\s*\[(?P<subsystem>\S+)\]\s*(?P<message>.*)') ??
-              parse_regex(.message, r'^(?P<dt>\d+-\d+-\d+T\d+:\d+:\d+\.\d+\w+)\s*(?P<id>\d+)\s*(?P<command>[^\t]+)\s*(?P<message>.*)?') ??
+          .mysql = parse_regex(.message, r'^(?P<ts>\d+-\d+-\d+T\d+:\d+:\d+\.\d+\w+)\s+(?P<thread>\d+)\s+\[(?P<priority>\S+)\]\s*\[(?P<error_code>\S+)\]\s*\[(?P<subsystem>\S+)\]\s*(?P<message>.*)') ??
+              parse_regex(.message, r'^(?P<ts>\d+-\d+-\d+T\d+:\d+:\d+\.\d+\w+)\s*(?P<id>\d+)\s*(?P<command>[^\t]+)\s*(?P<message>.*)?') ??
               {}
 
           if .mysql != {} {
             .platform = "MySQL"
-            if exists(.mysql.dt) { .ts = del(.mysql.dt) }
+            if exists(.mysql.ts) { .ts = del(.mysql.ts) }
             if exists(.mysql.thread) { .mysql.thread = to_int!(.mysql.thread) }
             if exists(.mysql.id) { .mysql.id = to_int!(.mysql.id) }
             .message = del(.mysql.message)
@@ -270,7 +276,7 @@ vector:
             del(.mongodb)
           }
 
-          .redis = parse_regex(.message, r'^(?P<pid>\d+):(?P<role_char>\w)\s+(?P<dt>\d+ \w+ \d+ \d{2}:\d{2}:\d{2}.\d+) (?P<level_symbol>.) (?P<message>.*)') ??
+          .redis = parse_regex(.message, r'^(?P<pid>\d+):(?P<role_char>\w)\s+(?P<ts>\d+ \w+ \d+ \d{2}:\d{2}:\d{2}.\d+) (?P<level_symbol>.) (?P<message>.*)') ??
               parse_regex(.message, r'^(?P<pid>\d+):(?P<role>\S+) \((?P<unix_timestamp>\d+)\) (?P<message>.*)') ??
               {}
 
@@ -298,8 +304,8 @@ vector:
 
             .redis.pid = to_int(.redis.pid) ?? null
 
-            if exists(.redis.dt) {
-              .ts = format_timestamp!(parse_timestamp(del(.redis.dt), "%d %b %Y %T%.f") ?? now(), "%+")
+            if exists(.redis.ts) {
+              .ts = format_timestamp!(parse_timestamp(del(.redis.ts), "%d %b %Y %T%.f") ?? now(), "%+")
             } else if exists(.redis.unix_timestamp) {
               .ts = format_timestamp!(to_timestamp(del(.redis.unix_timestamp)) ?? now(), "%+")
             }
