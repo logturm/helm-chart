@@ -307,7 +307,7 @@ vector:
             if exists(.redis.ts) {
               .ts = format_timestamp!(parse_timestamp(del(.redis.ts), "%d %b %Y %T%.f") ?? now(), "%+")
             } else if exists(.redis.unix_timestamp) {
-              .ts = format_timestamp!(to_timestamp(del(.redis.unix_timestamp)) ?? now(), "%+")
+              .ts = format_timestamp!(from_unix_timestamp(to_int!(del(.redis.unix_timestamp))) ?? now(), "%+")
             }
 
             .message = del(.redis.message)
